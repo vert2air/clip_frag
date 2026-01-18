@@ -1,0 +1,15 @@
+以下のMarkdownで書かれた仕様を満たす、Rust のソースコードを生成して。
+
+コードには、コメントをふんだんに含めること。
+コメントは日本語で、UTF-8エンコーディングにすること。
+
+コードを出力する際は、全体を三重引用符で囲み、改行がつぶれないようにすること。
+
+clipboard-win の現在の版数は v5.4 である。
+- APIの使い方を合わせること。
+- ClipboardへのUnicode文字列の書き込み方法に注意すること。
+    set_clipboard(formats::Unicode, text)?;
+- RawData も、以下が正しいimport先であることに注意すること。
+    clipboard_win::formats::RawData
+
+---
