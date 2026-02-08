@@ -90,7 +90,7 @@ pub fn format_with_underscore(n: usize) -> String {
     for (i, ch) in s.chars().enumerate() {
         out.push(ch);
         let pos_from_end = len - i - 1;
-        if pos_from_end > 0 && pos_from_end % 3 == 0 {
+        if pos_from_end > 0 && pos_from_end.is_multiple_of(3) {
             out.push('_');
         }
     }

@@ -20,7 +20,7 @@
 
 use anyhow::Result;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{BufRead, BufReader};
 
 // -----------------------------------------------------------------------------
 // read_line_from_tty

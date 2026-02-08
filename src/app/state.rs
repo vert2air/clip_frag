@@ -92,7 +92,7 @@ impl AppState {
             .iter()
             .map(|line| match unit {
                 Unit::Chars => line.chars().count(),
-                Unit::Bytes => line.as_bytes().len(),
+                Unit::Bytes => line.len(),
             })
             .collect();
 
