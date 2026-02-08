@@ -12,20 +12,20 @@
 // コードの見通しと保守性が大幅に向上する。
 // ============================================================================
 
-pub mod state;
-pub mod fragment;
-pub mod encoding;
-pub mod tty;
 pub mod clipboard;
+pub mod encoding;
+pub mod fragment;
+pub mod state;
+pub mod tty;
 
 use crate::Cli;
 use anyhow::Result;
 
-use state::{AppState, Unit};
-use fragment::{build_fragment, calc_consumed_units, format_with_underscore};
+use clipboard::{clear_clipboard, set_clip_utf16};
 use encoding::detect_encoding_and_decode;
+use fragment::{build_fragment, calc_consumed_units, format_with_underscore};
+use state::{AppState, Unit};
 use tty::read_line_from_tty;
-use clipboard::{set_clip_utf16, clear_clipboard};
 
 use std::fs::File;
 use std::io::{self, Read};
@@ -65,31 +65,28 @@ impl App {
         // ------------------------------------------------------------
         // 2. 入力データの読み込み
         // ------------------------------------------------------------
-        let (input_text, from_file, input_file_name) = if let Some(path) = cli.input_file {
-            // ファイルから読み込む
-            let mut f = File::open(&path)?;
-            let mut buf = Vec::new();
-            f.read_to_end(&mut buf)?;
+        let (input_text, from_file, input_file_name) =
+            if let Some(path) = cli.input_file {
+                // ファイルから読み込む
+                let mut f = File::open(&path)?;
+                let mut buf = Vec::new();
+                f.read_to_end(&mut buf)?;
 
-            // エンコード判定（UTF-8 / Shift_JIS）
-            let (text, encoding_name) = detect_encoding_and_decode(&buf)?;
-            eprintln!("encoding: {}", encoding_name);
+                // エンコード判定（UTF-8 / Shift_JIS）
+                let (text, encoding_name) = detect_encoding_and_decode(&buf)?;
+                eprintln!("encoding: {}", encoding_name);
 
-            (
-                text,
-                true,
-                Some(path.to_string_lossy().to_string()),
-            )
-        } else {
-            // 標準入力から読み込む
-            let mut buf = Vec::new();
-            io::stdin().read_to_end(&mut buf)?;
+                (text, true, Some(path.to_string_lossy().to_string()))
+            } else {
+                // 標準入力から読み込む
+                let mut buf = Vec::new();
+                io::stdin().read_to_end(&mut buf)?;
 
-            let (text, encoding_name) = detect_encoding_and_decode(&buf)?;
-            eprintln!("encoding: {}", encoding_name);
+                let (text, encoding_name) = detect_encoding_and_decode(&buf)?;
+                eprintln!("encoding: {}", encoding_name);
 
-            (text, false, None)
-        };
+                (text, false, None)
+            };
 
         // ------------------------------------------------------------
         // 3. AppState の初期化
@@ -107,7 +104,10 @@ impl App {
         // ------------------------------------------------------------
         if state.from_file {
             if let Some(ref name) = state.input_file_name {
-                let header = format!("以下に、ファイル: {} を入力します。\n---\n", name);
+                let header = format!(
+                    "以下に、ファイル: {} を入力します。\n---\n",
+                    name
+                );
                 set_clip_utf16(header.clone())?;
                 state.prev_contents = header;
             }
@@ -162,19 +162,22 @@ impl App {
             // ------------------------------------------------------------
             // 進捗計算
             // ------------------------------------------------------------
-            let consumed_before = calc_consumed_units(&self.state, self.state.curr_index);
+            let consumed_before =
+                calc_consumed_units(&self.state, self.state.curr_index);
             let consumed_after = consumed_before + fragment_units;
 
             let percent_fragment = if self.state.total_units == 0 {
                 0.0
             } else {
-                (fragment_units as f64) * 100.0 / (self.state.total_units as f64)
+                (fragment_units as f64) * 100.0
+                    / (self.state.total_units as f64)
             };
 
             let percent_cumulative = if self.state.total_units == 0 {
                 0.0
             } else {
-                (consumed_after as f64) * 100.0 / (self.state.total_units as f64)
+                (consumed_after as f64) * 100.0
+                    / (self.state.total_units as f64)
             };
 
             let unit_label = match self.state.unit {
@@ -191,8 +194,8 @@ impl App {
             // ------------------------------------------------------------
             eprint!(
                 "+{} [{}] ({:.1} %), {} / {} ({:.1} %): Y(es)/P(rev)/Q(uit) [y]: ",
-                frag_str, unit_label, percent_fragment,
-                cumu_str, total_str, percent_cumulative
+                frag_str, unit_label, percent_fragment, cumu_str, total_str,
+                percent_cumulative
             );
 
             // ------------------------------------------------------------
@@ -246,7 +249,9 @@ impl App {
 
             match decision.to_lowercase().as_str() {
                 "y" | "yes" => {
-                    let footer = if let Some(ref name) = self.state.input_file_name {
+                    let footer = if let Some(ref name) =
+                        self.state.input_file_name
+                    {
                         format!("以上が、ファイル: {} の内容である。\n", name)
                     } else {
                         "以上が、入力データの内容である。\n".to_string()

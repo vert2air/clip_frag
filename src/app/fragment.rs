@@ -29,13 +29,16 @@ use super::state::{AppState, Unit};
 //
 // curr_index から始めて、最大データ量（chars or bytes）を超えない範囲で
 // 行を詰め込んだフラグメントを構築する。
-// 
+//
 // 仕様：
 //   - 行は途中で分割しない。
 //   - 1 行追加すると max_unit を超える場合、その行は含めない。
 //   - fragment（String）、fragment_units（usize）、next_index（usize）を返す。
 // -----------------------------------------------------------------------------
-pub fn build_fragment(state: &AppState, start_index: usize) -> (String, usize, usize) {
+pub fn build_fragment(
+    state: &AppState,
+    start_index: usize,
+) -> (String, usize, usize) {
     let mut fragment = String::new();
     let mut used_units = 0usize;
     let mut idx = start_index;

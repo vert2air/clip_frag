@@ -14,8 +14,8 @@
 
 mod app;
 
-use clap::Parser;
 use anyhow::Result;
+use clap::Parser;
 
 // -----------------------------------------------------------------------------
 // CLI 引数定義
