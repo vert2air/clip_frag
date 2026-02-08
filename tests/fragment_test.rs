@@ -10,7 +10,7 @@ fn make_state(lines: Vec<&str>, max_unit: usize, unit: Unit) -> AppState {
         .iter()
         .map(|s| match unit {
             Unit::Chars => s.chars().count(),
-            Unit::Bytes => s.as_bytes().len(),
+            Unit::Bytes => s.len(),
         })
         .collect();
 
