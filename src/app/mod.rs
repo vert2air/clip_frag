@@ -1,16 +1,22 @@
-// ============================================================================
-// src/app/mod.rs
-// ============================================================================
-//
-// このファイルは clip_frag アプリケーションの「中核モジュール」である。
-// App 構造体を定義し、アプリケーション全体の状態遷移（main → finalize → exit）
-// を制御する責務を持つ。
-//
-// ただし、実際のロジック（フラグメント構築、エンコード判定、TTY 入力、
-// クリップボード操作など）は、すべてサブモジュールに委譲する。
-// これにより App は「オーケストレーション」に集中でき、
-// コードの見通しと保守性が大幅に向上する。
-// ============================================================================
+//! ============================================================================
+//! src/app/mod.rs
+//! ============================================================================
+//!
+//! clip_frag のアプリケーションロジックの中心。
+//!
+//! App 構造体は「状態遷移のオーケストレーション」を担当し、
+//! 実際の処理（分割・エンコード判定・TTY 入力・クリップボード操作）は
+//! すべてサブモジュールに委譲する。
+//!
+//! 設計思想：
+//!   - App は「状態遷移の制御」に専念する。
+//!   - 純粋ロジックは fragment.rs / encoding.rs / state.rs に分離。
+//!   - I/O は tty.rs / clipboard.rs に分離。
+//!   - CLI パーサ（Cli）は main.rs に閉じ込める。
+//!
+//! これにより、テスト容易性・保守性・責務分離が最大化される。
+//!
+//! ============================================================================
 
 pub mod clipboard;
 pub mod encoding;
@@ -18,27 +24,24 @@ pub mod fragment;
 pub mod state;
 pub mod tty;
 
-use crate::Cli;
+pub use state::Unit;
+
 use anyhow::Result;
 
 use clipboard::{clear_clipboard, set_clip_utf16};
-use encoding::detect_encoding_and_decode;
 use fragment::{build_fragment, calc_consumed_units, format_with_underscore};
-use state::{AppState, Unit};
+use state::AppState;
 use tty::read_line_from_tty;
-
-use std::fs::File;
-use std::io::{self, Read};
 
 // ============================================================================
 // App 構造体
 // ============================================================================
 //
-// App はアプリケーション全体の状態を保持し、
+// App はアプリケーション全体の状態（AppState）を保持し、
 // main_loop → finalize_loop → exit_loop の流れを制御する。
 // ============================================================================
 pub struct App {
-    /// アプリケーションの状態（prev_contents, curr_index など）
+    /// アプリケーションの状態（行データ・進捗・前回内容など）
     pub state: AppState,
 }
 
@@ -47,50 +50,20 @@ impl App {
     // App::new
     // ------------------------------------------------------------------------
     //
-    // CLI 引数を受け取り、AppState を初期化する。
-    // 入力データの読み込み、エンコード判定、行分割などもここで行う。
+    // CLI に依存しない純粋な初期化関数。
+    // main.rs 側で読み込んだ入力データと設定値を受け取り、
+    // AppState を構築する。
     //
-    pub fn new(cli: Cli) -> Result<Self> {
-        // ------------------------------------------------------------
-        // 1. 最大データ量の決定
-        // ------------------------------------------------------------
-        let (unit, max_unit) = if let Some(c) = cli.chars {
-            (Unit::Chars, c)
-        } else if let Some(b) = cli.bytes {
-            (Unit::Bytes, b)
-        } else {
-            (Unit::Chars, 10_240) // デフォルトは 10,240 文字
-        };
-
-        // ------------------------------------------------------------
-        // 2. 入力データの読み込み
-        // ------------------------------------------------------------
-        let (input_text, from_file, input_file_name) =
-            if let Some(path) = cli.input_file {
-                // ファイルから読み込む
-                let mut f = File::open(&path)?;
-                let mut buf = Vec::new();
-                f.read_to_end(&mut buf)?;
-
-                // エンコード判定（UTF-8 / Shift_JIS）
-                let (text, encoding_name) = detect_encoding_and_decode(&buf)?;
-                eprintln!("encoding: {}", encoding_name);
-
-                (text, true, Some(path.to_string_lossy().to_string()))
-            } else {
-                // 標準入力から読み込む
-                let mut buf = Vec::new();
-                io::stdin().read_to_end(&mut buf)?;
-
-                let (text, encoding_name) = detect_encoding_and_decode(&buf)?;
-                eprintln!("encoding: {}", encoding_name);
-
-                (text, false, None)
-            };
-
-        // ------------------------------------------------------------
-        // 3. AppState の初期化
-        // ------------------------------------------------------------
+    // ファイル指定時はヘッダを clipboard に入れる。
+    // ------------------------------------------------------------------------
+    pub fn new(
+        input_text: String,
+        unit: Unit,
+        max_unit: usize,
+        from_file: bool,
+        input_file_name: Option<String>,
+    ) -> Result<Self> {
+        // AppState の構築（行分割・単位計算など）
         let mut state = AppState::new(
             input_text,
             unit,
@@ -99,9 +72,7 @@ impl App {
             input_file_name,
         );
 
-        // ------------------------------------------------------------
-        // 4. prev_contents の初期化（ファイル指定時のみ）
-        // ------------------------------------------------------------
+        // ファイル指定時はヘッダを clipboard に入れる
         if state.from_file {
             if let Some(ref name) = state.input_file_name {
                 let header = format!(
@@ -120,19 +91,16 @@ impl App {
     // App::run
     // ------------------------------------------------------------------------
     //
-    // アプリケーション本体の実行。
-    // main_loop → finalize_loop（ファイル指定時のみ）→ exit_loop の順に進む。
-    //
+    // アプリケーションのメインフロー。
+    // main_loop → finalize_loop（ファイル指定時）→ exit_loop の順に進む。
+    // ------------------------------------------------------------------------
     pub fn run(&mut self) -> Result<()> {
-        // main_loop（分割処理の本体）
         self.main_loop()?;
 
-        // finalize_loop（ファイル指定時のみ）
         if self.state.from_file {
             self.finalize_loop()?;
         }
 
-        // exit_loop（終了処理）
         self.exit_loop()?;
 
         Ok(())
@@ -146,22 +114,20 @@ impl App {
     // curr_index から始めて、最大データ量を超えない範囲で行を詰め込み、
     // ユーザに Yes/Prev/Quit を問い合わせる。
     //
+    // fragment.rs の build_fragment が純粋ロジックとして分割を担当する。
+    // ------------------------------------------------------------------------
     fn main_loop(&mut self) -> Result<()> {
         loop {
-            // すでに全行を処理し終えている場合は終了
+            // 全行処理済みなら終了
             if self.state.curr_index >= self.state.lines.len() {
                 break;
             }
 
-            // ------------------------------------------------------------
-            // フラグメント構築
-            // ------------------------------------------------------------
+            // フラグメント構築（純粋ロジック）
             let (fragment, fragment_units, next_index) =
                 build_fragment(&self.state, self.state.curr_index);
 
-            // ------------------------------------------------------------
-            // 進捗計算
-            // ------------------------------------------------------------
+            // 進捗計算（純粋ロジック）
             let consumed_before =
                 calc_consumed_units(&self.state, self.state.curr_index);
             let consumed_after = consumed_before + fragment_units;
@@ -189,24 +155,20 @@ impl App {
             let total_str = format_with_underscore(self.state.total_units);
             let cumu_str = format_with_underscore(consumed_after);
 
-            // ------------------------------------------------------------
             // プロンプト表示
-            // ------------------------------------------------------------
             eprint!(
                 "+{} [{}] ({:.1} %), {} / {} ({:.1} %): Y(es)/P(rev)/Q(uit) [y]: ",
-                frag_str, unit_label, percent_fragment, cumu_str, total_str,
-                percent_cumulative
+                frag_str, unit_label, percent_fragment,
+                cumu_str, total_str, percent_cumulative
             );
 
-            // ------------------------------------------------------------
-            // TTY からユーザ入力
-            // ------------------------------------------------------------
+            // TTY 入力（tty.rs）
             let input = read_line_from_tty()?.trim().to_string();
             let decision = if input.is_empty() { "y" } else { &input };
 
             match decision.to_lowercase().as_str() {
                 "y" | "yes" => {
-                    // Yes → fragment を clipboard に取り込む
+                    // fragment を clipboard に取り込む
                     set_clip_utf16(fragment.clone())?;
                     self.state.prev_contents = fragment;
                     self.state.curr_index = next_index;
@@ -216,16 +178,16 @@ impl App {
                     }
                 }
                 "p" | "prev" => {
-                    // Prev → prev_contents を clipboard に取り込む
+                    // 前回内容を clipboard に戻す
                     set_clip_utf16(self.state.prev_contents.clone())?;
                 }
                 "q" | "quit" => {
-                    // Quit → clipboard をクリアして終了
+                    // 終了
                     clear_clipboard()?;
                     std::process::exit(0);
                 }
                 _ => {
-                    eprintln!("無効な入力です。Y(es)/P(rev)/Q(uit) のいずれかを入力してください。");
+                    eprintln!("無効な入力です。Y(es)/P(rev)/Q(uit) を入力してください。");
                 }
             }
         }
@@ -238,8 +200,8 @@ impl App {
     // ------------------------------------------------------------------------
     //
     // ファイル指定時のみ実行される「クローズ処理」。
-    // 最後に「以上が、ファイル: <名前> の内容である。」を貼るかどうかを確認する。
-    //
+    // 最後に「以上が、ファイル: <名前> の内容である。」を貼るかどうか確認する。
+    // ------------------------------------------------------------------------
     fn finalize_loop(&mut self) -> Result<()> {
         loop {
             eprint!("+footer prompt: Y(es)/P(rev)/Q(uit) [y]: ");
@@ -249,9 +211,7 @@ impl App {
 
             match decision.to_lowercase().as_str() {
                 "y" | "yes" => {
-                    let footer = if let Some(ref name) =
-                        self.state.input_file_name
-                    {
+                    let footer = if let Some(ref name) = self.state.input_file_name {
                         format!("以上が、ファイル: {} の内容である。\n", name)
                     } else {
                         "以上が、入力データの内容である。\n".to_string()
@@ -270,7 +230,7 @@ impl App {
                     std::process::exit(0);
                 }
                 _ => {
-                    eprintln!("無効な入力です。Y(es)/P(rev)/Q(uit) のいずれかを入力してください。");
+                    eprintln!("無効な入力です。Y(es)/P(rev)/Q(uit) を入力してください。");
                 }
             }
         }
@@ -284,7 +244,7 @@ impl App {
     //
     // 最終終了処理。
     // P(rev)/Q(uit) のみ。
-    //
+    // ------------------------------------------------------------------------
     fn exit_loop(&mut self) -> Result<()> {
         loop {
             eprint!("P(rev)/Q(uit) [q]: ");
@@ -301,7 +261,7 @@ impl App {
                     std::process::exit(0);
                 }
                 _ => {
-                    eprintln!("無効な入力です。P(rev)/Q(uit) のいずれかを入力してください。");
+                    eprintln!("無効な入力です。P(rev)/Q(uit) を入力してください。");
                 }
             }
         }
