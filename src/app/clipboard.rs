@@ -1,55 +1,60 @@
-// ============================================================================
-// src/app/clipboard.rs
-// ============================================================================
-//
-// このファイルでは、Windows のクリップボード操作を安全に扱うための
-// ラッパー関数を提供する。
-//
-// clip_frag が依存する clipboard-win v5.4 の API は、
-//   set_clipboard(formats::Unicode, text) -> Result<(), ErrorCode>
-// のように、ErrorCode を返す。
-//
-// しかし ErrorCode は std::error::Error を実装していないため、
-// anyhow::Error に自動変換できず、`?` 演算子が使えない。
-//
-// そこで本モジュールでは、ErrorCode を anyhow::Error に変換する
-// set_clip_utf16() を提供し、アプリ本体からは安全に `?` が使えるようにする。
-//
-// また、クリップボードをクリアする clear_clipboard() も提供する。
-// ============================================================================
+//! ============================================================================
+//! src/app/clipboard.rs
+//! ============================================================================
+//!
+//! このモジュールは、Windows / macOS / Linux のすべてで動作する
+//! クロスプラットフォームなクリップボード操作を提供する。
+//!
+//! 以前は clipboard-win を使用していたが、Windows 専用であり
+//! CI（Ubuntu）や macOS では動作しなかった。
+//!
+//! 現在は arboard を採用し、以下のメリットを得ている：
+//!   - Windows / macOS / Linux すべてで動作
+//!   - UTF-8 ベースで Rust の String と相性が良い
+//!   - エラー型が std::error::Error を実装しており anyhow と相性抜群
+//!   - OS ごとの API を意識せずに統一的に扱える
+//!
+//! clip_frag の設計思想（責務分離・安全ラップ）に完全に一致する。
+//!
+//! ============================================================================
 
-use anyhow::Result;
-use clipboard_win::{formats, set_clipboard};
+use anyhow::{Context, Result};
+use arboard::Clipboard;
 
 // -----------------------------------------------------------------------------
-// set_clip_utf16
+// set_clip_utf16（UTF-8 ベースのクロスプラットフォーム版）
 // -----------------------------------------------------------------------------
 //
-// clipboard-win v5.4 の set_clipboard() を安全にラップする関数。
+// Windows では UTF-16 が内部的に使われるが、arboard は UTF-8 を受け付けるため
+// UTF-16 を意識する必要はない。
 //
-// - Unicode 文字列をクリップボードに設定する。
-// - ErrorCode を anyhow::Error に変換する。
-// - アプリ本体では set_clip_utf16(text)?; と書くだけでよい。
+// - クリップボードに text を設定する
+// - OS に依存しない
+// - anyhow::Result で安全に扱える
 // -----------------------------------------------------------------------------
-
-//pub fn set_clip_utf16(text: String) -> Result<()> {
-//    set_clipboard(formats::Unicode, text)
-//        .map_err(|e| anyhow::anyhow!("clipboard error: {:?}", e))
-//}
 pub fn set_clip_utf16(text: impl AsRef<str>) -> Result<()> {
-    set_clipboard(formats::Unicode, text.as_ref().to_string())
-        .map_err(|e| anyhow::anyhow!("clipboard error: {:?}", e))
+    let mut clipboard =
+        Clipboard::new().context("failed to open clipboard")?;
+
+    clipboard
+        .set_text(text.as_ref().to_string())
+        .context("failed to set clipboard text")?;
+
+    Ok(())
 }
 
 // -----------------------------------------------------------------------------
 // clear_clipboard
 // -----------------------------------------------------------------------------
 //
-// クリップボードをクリアする。
-// clipboard-win には「クリア専用 API」はないため、
-// 空文字列を書き込むことで実質的なクリアとする。
+// クリップボードを空文字列で上書きすることでクリアする。
+// Windows / macOS / Linux すべてで動作する。
 // -----------------------------------------------------------------------------
 pub fn clear_clipboard() -> Result<()> {
-    set_clipboard(formats::Unicode, String::new())
-        .map_err(|e| anyhow::anyhow!("clipboard clear error: {:?}", e))
+    let mut clipboard =
+        Clipboard::new().context("failed to open clipboard")?;
+
+    clipboard.set_text(String::new()).context("failed to clear clipboard")?;
+
+    Ok(())
 }
