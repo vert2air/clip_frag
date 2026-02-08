@@ -211,7 +211,9 @@ impl App {
 
             match decision.to_lowercase().as_str() {
                 "y" | "yes" => {
-                    let footer = if let Some(ref name) = self.state.input_file_name {
+                    let footer = if let Some(ref name) =
+                        self.state.input_file_name
+                    {
                         format!("以上が、ファイル: {} の内容である。\n", name)
                     } else {
                         "以上が、入力データの内容である。\n".to_string()
@@ -261,7 +263,9 @@ impl App {
                     std::process::exit(0);
                 }
                 _ => {
-                    eprintln!("無効な入力です。P(rev)/Q(uit) を入力してください。");
+                    eprintln!(
+                        "無効な入力です。P(rev)/Q(uit) を入力してください。"
+                    );
                 }
             }
         }

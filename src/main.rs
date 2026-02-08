@@ -63,42 +63,38 @@ fn main() -> Result<()> {
     //    読み込んだバイト列は encoding.rs の detect_encoding_and_decode に渡し、
     //    UTF-8 または Shift_JIS としてデコードする。
     // -------------------------------------------------------------------------
-    let (input_text, from_file, input_file_name) = if let Some(path) = cli.input_file {
-        // ファイル入力
-        let mut f = std::fs::File::open(&path)?;
-        let mut buf = Vec::new();
-        use std::io::Read;
-        f.read_to_end(&mut buf)?;
+    let (input_text, from_file, input_file_name) =
+        if let Some(path) = cli.input_file {
+            // ファイル入力
+            let mut f = std::fs::File::open(&path)?;
+            let mut buf = Vec::new();
+            use std::io::Read;
+            f.read_to_end(&mut buf)?;
 
-        let (text, encoding_name) =
-            clip_frag::app::encoding::detect_encoding_and_decode(&buf)?;
-        eprintln!("encoding: {}", encoding_name);
+            let (text, encoding_name) =
+                clip_frag::app::encoding::detect_encoding_and_decode(&buf)?;
+            eprintln!("encoding: {}", encoding_name);
 
-        (text, true, Some(path.to_string_lossy().to_string()))
-    } else {
-        // 標準入力
-        let mut buf = Vec::new();
-        use std::io::Read;
-        std::io::stdin().read_to_end(&mut buf)?;
+            (text, true, Some(path.to_string_lossy().to_string()))
+        } else {
+            // 標準入力
+            let mut buf = Vec::new();
+            use std::io::Read;
+            std::io::stdin().read_to_end(&mut buf)?;
 
-        let (text, encoding_name) =
-            clip_frag::app::encoding::detect_encoding_and_decode(&buf)?;
-        eprintln!("encoding: {}", encoding_name);
+            let (text, encoding_name) =
+                clip_frag::app::encoding::detect_encoding_and_decode(&buf)?;
+            eprintln!("encoding: {}", encoding_name);
 
-        (text, false, None)
-    };
+            (text, false, None)
+        };
 
     // -------------------------------------------------------------------------
     // 4. App の初期化
     //    App::new は CLI に依存しない純粋ロジック。
     // -------------------------------------------------------------------------
-    let mut app = App::new(
-        input_text,
-        unit,
-        max_unit,
-        from_file,
-        input_file_name,
-    )?;
+    let mut app =
+        App::new(input_text, unit, max_unit, from_file, input_file_name)?;
 
     // -------------------------------------------------------------------------
     // 5. 実行

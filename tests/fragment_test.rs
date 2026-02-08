@@ -1,12 +1,11 @@
 use clip_frag::app::fragment::{
-    build_fragment,
-    calc_consumed_units,
-    format_with_underscore,
+    build_fragment, calc_consumed_units, format_with_underscore,
 };
 use clip_frag::app::state::{AppState, Unit};
 
 fn make_state(lines: Vec<&str>, max_unit: usize, unit: Unit) -> AppState {
-    let lines: Vec<String> = lines.into_iter().map(|s| s.to_string()).collect();
+    let lines: Vec<String> =
+        lines.into_iter().map(|s| s.to_string()).collect();
     let line_units: Vec<usize> = lines
         .iter()
         .map(|s| match unit {
@@ -18,7 +17,7 @@ fn make_state(lines: Vec<&str>, max_unit: usize, unit: Unit) -> AppState {
     let total_units: usize = line_units.iter().sum();
 
     AppState {
-        input_text: String::new(),  // testでは不要なので、空でOK
+        input_text: String::new(), // testでは不要なので、空でOK
         lines,
         line_units,
         total_units,
@@ -26,7 +25,7 @@ fn make_state(lines: Vec<&str>, max_unit: usize, unit: Unit) -> AppState {
         unit,
         prev_contents: String::new(),
         curr_index: 0,
-        from_file: false,          // testでは常にfalse
+        from_file: false, // testでは常にfalse
         input_file_name: None,
     }
 }

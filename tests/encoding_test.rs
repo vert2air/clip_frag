@@ -14,9 +14,8 @@ fn test_detect_utf8() {
 fn test_detect_shift_jis() {
     // "こんにちは" の Shift_JIS バイト列
     // 82 B1 82 F1 82 C9 82 BF 82 CD
-    let sjis = vec![
-        0x82, 0xB1, 0x82, 0xF1, 0x82, 0xC9, 0x82, 0xBF, 0x82, 0xCD,
-    ];
+    let sjis =
+        vec![0x82, 0xB1, 0x82, 0xF1, 0x82, 0xC9, 0x82, 0xBF, 0x82, 0xCD];
 
     let (decoded, enc) = detect_encoding_and_decode(&sjis).unwrap();
 
