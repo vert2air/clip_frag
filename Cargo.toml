@@ -7,3 +7,4 @@ edition = "2021"
 clap = { version = "4", features = ["derive"] }
 encoding_rs = "0.8"
 clipboard-win = "5.4"
+anyhow = "1.0.101"
